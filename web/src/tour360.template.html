@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="es">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tour 360 Blender</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&family=Manrope:wght@400;600;700&display=swap">
+<style>
+/* Layout: full-bleed 360° photo viewer. Title top-left, mini-map top-right, stop strip bottom, photo gallery as an overlay. Single dark look over photography. */
+:root{
+  --ink:#f2f6f2; --muted:#c6d2c9; --glass:rgba(10,16,12,.7); --line:rgba(255,255,255,.2); --mar:#5fd0c9; --warm:#ffc670;
+  --font-display:"Marcellus", Georgia, serif; --font-body:"Manrope", system-ui, sans-serif;
+  color-scheme:dark;
+}
+html,body{height:100%}
+[hidden]{display:none!important}
+body{margin:0;background:#0a100c;color:var(--ink);font-family:var(--font-body);overflow:hidden}
+#c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#c.drag{cursor:grabbing}
+.ui{position:fixed;z-index:5}
+.title{top:calc(16px + env(safe-area-inset-top,0px));left:max(16px,env(safe-area-inset-left,0px));max-width:min(440px,calc(100% - 200px));pointer-events:none}
+.title .eb{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--mar);font-weight:700;text-shadow:0 1px 8px rgba(0,0,0,.8)}
+.title h1{font-family:var(--font-display);font-weight:400;font-size:clamp(26px,4vw,42px);margin:4px 0 0;line-height:1.02;text-shadow:0 2px 22px rgba(0,0,0,.7)}
+.title p{margin:6px 0 0;color:#e6ede8;font-size:14px;text-shadow:0 1px 10px rgba(0,0,0,.95)}
+.map{top:calc(16px + env(safe-area-inset-top,0px));right:max(16px,env(safe-area-inset-right,0px));width:150px;background:var(--glass);backdrop-filter:blur(12px);border:1px solid var(--line);border-radius:14px;padding:8px}
+.map svg{display:block;width:100%;height:auto}
+.map .lbl{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:2px 2px 6px}
+.bar{left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--glass);backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:18px;padding:12px;display:flex;flex-direction:column;gap:10px;width:min(860px,calc(100% - 32px))}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.spacer{flex:1}
+.here{font-family:var(--font-display);font-size:22px;line-height:1}
+.here small{display:block;font-family:var(--font-body);font-size:12px;color:var(--muted);margin-top:4px;letter-spacing:.04em}
+button{font:600 14px/1 var(--font-body);color:var(--ink);background:rgba(255,255,255,.08);border:1px solid var(--line);border-radius:999px;padding:10px 14px;cursor:pointer}
+button:hover{background:rgba(255,255,255,.16)}
+button[aria-pressed="true"]{background:var(--ink);color:#0a100c}
+:focus-visible{outline:2px solid var(--mar);outline-offset:2px}
+.strip{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.strip::-webkit-scrollbar{display:none}
+.thumb{flex:0 0 auto;width:118px;padding:0;border-radius:10px;overflow:hidden;background:#000;border:2px solid transparent;text-align:left}
+.thumb img{display:block;width:100%;height:58px;object-fit:cover;object-position:50% 55%}
+.thumb span{display:block;font-size:11px;font-weight:600;padding:6px 8px;background:rgba(0,0,0,.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.thumb[aria-pressed="true"]{border-color:var(--mar);background:#000;color:var(--ink)}
+#hs{position:fixed;inset:0;pointer-events:none;z-index:4}
+.hot{position:absolute;left:0;top:0;pointer-events:auto;display:flex;flex-direction:column;align-items:center;gap:6px;background:none;border:0;padding:0;transform:translate(-50%,-50%)}
+.hot i{width:34px;height:34px;border-radius:50%;border:2px solid #fff;background:rgba(95,208,201,.35);box-shadow:0 0 0 6px rgba(255,255,255,.15),0 4px 18px rgba(0,0,0,.5);display:block}
+.hot:hover i{background:rgba(95,208,201,.75)}
+.hot span{font:600 12px/1 var(--font-body);background:rgba(10,16,12,.78);border:1px solid var(--line);border-radius:999px;padding:6px 10px;white-space:nowrap}
+.hint{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:3;font-size:14px;color:#fff;background:rgba(0,0,0,.45);padding:10px 16px;border-radius:999px;pointer-events:none;transition:opacity .6s}
+.gallery{position:fixed;inset:0;z-index:20;background:rgba(6,10,8,.94);overflow:auto;padding-block:calc(20px + env(safe-area-inset-top,0px)) calc(20px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.gallery .head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;max-width:1200px;margin:0 auto 16px}
+.gallery h2{font-family:var(--font-display);font-weight:400;font-size:28px;margin:0}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(360px,100%),1fr));gap:12px;max-width:1200px;margin:0 auto}
+.grid figure{margin:0;border-radius:12px;overflow:hidden;background:#111;cursor:zoom-in}
+.grid img{display:block;width:100%;height:auto;aspect-ratio:16/9;object-fit:cover}
+.grid figcaption{font-size:13px;color:var(--muted);padding:8px 10px}
+.lightbox{position:fixed;inset:0;z-index:30;background:rgba(0,0,0,.95);display:grid;place-items:center;padding:16px}
+.lightbox img{max-width:100%;max-height:100%;border-radius:8px}
+.lightbox button{position:fixed;top:calc(16px + env(safe-area-inset-top,0px));right:max(16px,env(safe-area-inset-right,0px))}
+.loading{position:fixed;inset:0;display:grid;place-items:center;color:var(--muted);font-size:14px;z-index:1}
+@media (max-width:640px){.title p{display:none}.map{width:110px}.thumb{width:96px}.thumb img{height:48px}}
+</style>
+
+<canvas id="c" aria-label="Panorama 360 del parque central"></canvas>
+<div id="hs"></div>
+<div class="loading" id="loading">Cargando panorama…</div>
+<div class="hint" id="hint">Arrastra para mirar alrededor</div>
+
+<div class="ui title">
+  <div class="eb">Recorrido virtual 360° · render ilustrativo</div>
+  <h1>Parque central</h1>
+  <p>Parque central de amenidades, a las medidas del plano de lotes. Toca los círculos para avanzar.</p>
+</div>
+
+<div class="ui map" aria-label="Mapa del parque">
+  <div class="lbl">Parque central</div>
+  <svg id="map" role="img" aria-label="Mapa con tu posición"></svg>
+</div>
+
+<div class="ui bar">
+  <div class="row">
+    <div class="here" id="here">Llegada<small id="here-sub"></small></div>
+    <span class="spacer"></span>
+    <button type="button" id="auto" aria-pressed="true">Giro automático</button>
+    <button type="button" id="open-gallery">Fotos</button>
+  </div>
+  <div class="strip" id="strip" role="toolbar" aria-label="Puntos del recorrido"></div>
+</div>
+
+<section class="gallery" id="gallery" hidden aria-label="Galería de fotos">
+  <div class="head">
+    <h2>Galería del parque</h2>
+    <span class="spacer"></span>
+    <div class="row" role="group" aria-label="Luz">
+      <button type="button" data-g="tarde" aria-pressed="true">Atardecer</button>
+      <button type="button" data-g="dia" aria-pressed="false">Día</button>
+    </div>
+    <button type="button" id="close-gallery">Cerrar</button>
+  </div>
+  <div class="grid" id="grid"></div>
+</section>
+<div class="lightbox" id="lightbox" hidden><img id="lb-img" alt=""><button type="button" id="lb-close">Cerrar</button></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const META = {{META}};
+const FOTOS = {{FOTOS}};
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const panos = META.panos;
+// encuadre inicial de cada punto (grados; 0 = hacia el fondo del parque, + = derecha)
+const START = { llegada: [0, -4], ceiba: [-15, 4], cancha: [0, -14], dentro_cancha: [0, 6], yoga: [0, 10], mirador: [-150, -16], juegos: [-90, -8], palapas: [-45, -2], dron: [0, -34] };
+
+/* ---------- visor ---------- */
+const canvas = document.getElementById("c");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputEncoding = THREE.sRGBEncoding;
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 100);
+camera.rotation.order = "YXZ";
+const geo = new THREE.SphereGeometry(50, 96, 64); geo.scale(-1, 1, 1);
+function sphere() { const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ transparent: true, opacity: 1, depthWrite: false })); m.rotation.y = -Math.PI / 2; scene.add(m); return m; }
+let front = sphere(), back = sphere(); back.material.opacity = 0; back.renderOrder = 1;
+const loader = new THREE.TextureLoader();
+const cache = {};
+function loadTex(i) {
+  if (cache[i]) return cache[i];
+  cache[i] = new Promise((res, rej) => loader.load(panos[i].file, t => { t.encoding = THREE.sRGBEncoding; t.anisotropy = renderer.capabilities.getMaxAnisotropy(); t.minFilter = THREE.LinearFilter; t.generateMipmaps = false; res(t); }, undefined, rej));
+  return cache[i];
+}
+let yaw = 0, pitch = 0, fov = 75, cur = -1, fade = null, autoRot = !reduce;
+const deg = Math.PI / 180;
+
+/* ---------- puntos calientes hacia otros panoramas ---------- */
+const hsLayer = document.getElementById("hs");
+function dirTo(a, b) {
+  const dx = b.x - a.x, dz = b.z - a.z, dy = (b.y - 1.6) - a.y, h = Math.hypot(dx, dz);
+  const yw = Math.atan2(dx, -dz), pt = Math.atan2(dy, Math.max(h, 0.1));
+  return { v: new THREE.Vector3(Math.sin(yw) * Math.cos(pt), Math.sin(pt), -Math.cos(yw) * Math.cos(pt)), dist: Math.hypot(h, dy) };
+}
+let hots = [];
+function buildHotspots() {
+  hsLayer.innerHTML = ""; hots = [];
+  const a = panos[cur];
+  panos.forEach((b, j) => {
+    if (j === cur) return; const d = dirTo(a, b);
+    if (a.id !== "dron" && b.id !== "dron" && d.dist > 75) return;
+    if (a.id === "dron" && b.id !== "llegada") return;
+    const el = document.createElement("button"); el.type = "button"; el.className = "hot";
+    el.innerHTML = `<i></i><span>${b.name} · ${Math.round(d.dist)} m</span>`; el.onclick = () => go(j);
+    hsLayer.appendChild(el); hots.push({ el, v: d.v });
+  });
+}
+
+/* ---------- navegación ---------- */
+const strip = document.getElementById("strip");
+panos.forEach((p, i) => {
+  const b = document.createElement("button"); b.type = "button"; b.className = "thumb"; b.setAttribute("aria-pressed", "false");
+  b.innerHTML = `<img src="${p.file}" alt="" loading="lazy"><span>${p.name}</span>`; b.onclick = () => go(i); strip.appendChild(b);
+});
+async function go(i) {
+  if (i === cur) return;
+  const t = await loadTex(i);
+  const first = cur < 0; cur = i;
+  [...strip.children].forEach((b, j) => b.setAttribute("aria-pressed", j === i));
+  strip.children[i].scrollIntoView({ block: "nearest", inline: "center", behavior: reduce ? "auto" : "smooth" });
+  document.getElementById("here").firstChild.textContent = panos[i].name;
+  document.getElementById("here-sub").textContent = panos[i].y > 20 ? `Altura ${Math.round(panos[i].y)} m` : panos[i].y > 5 ? `Mirador · ${Math.round(panos[i].y)} m de altura` : panos[i].y < 0 ? "3 m bajo el nivel del jardín" : "A la altura de los ojos";
+  const s = START[panos[i].id] || [0, 0];
+  if (first || reduce) { front.material.map = t; front.material.needsUpdate = true; yaw = s[0] * deg; pitch = s[1] * deg; }
+  else { back.material.map = t; back.material.needsUpdate = true; back.material.opacity = 0; fade = { k: 0, toYaw: s[0] * deg, toPitch: s[1] * deg, fromYaw: yaw, fromPitch: pitch }; }
+  buildHotspots(); drawMap();
+  const n = panos[(i + 1) % panos.length]; if (n) loadTex((i + 1) % panos.length);
+  document.getElementById("loading")?.remove();
+}
+
+/* ---------- arrastrar, zoom ---------- */
+let drag = null;
+canvas.addEventListener("pointerdown", e => { drag = { x: e.clientX, y: e.clientY, yaw, pitch }; canvas.setPointerCapture(e.pointerId); canvas.classList.add("drag"); setAuto(false); hideHint(); });
+canvas.addEventListener("pointermove", e => { if (!drag) return; const k = fov / innerHeight * deg; yaw = drag.yaw - (e.clientX - drag.x) * k * 1.0; pitch = Math.max(-85 * deg, Math.min(85 * deg, drag.pitch + (e.clientY - drag.y) * k)); });
+canvas.addEventListener("pointerup", () => { drag = null; canvas.classList.remove("drag"); });
+canvas.addEventListener("wheel", e => { e.preventDefault(); fov = Math.max(35, Math.min(95, fov + e.deltaY * 0.04)); }, { passive: false });
+let pinch = null;
+canvas.addEventListener("touchstart", e => { if (e.touches.length === 2) pinch = { d: Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY), fov }; }, { passive: true });
+canvas.addEventListener("touchmove", e => { if (pinch && e.touches.length === 2) { const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); fov = Math.max(35, Math.min(95, pinch.fov * pinch.d / d)); } }, { passive: true });
+canvas.addEventListener("touchend", () => pinch = null);
+addEventListener("keydown", e => { if (e.target.closest && e.target.closest("button")) return; const s = 5 * deg; if (e.key === "ArrowLeft") yaw -= s; if (e.key === "ArrowRight") yaw += s; if (e.key === "ArrowUp") pitch = Math.min(85 * deg, pitch + s); if (e.key === "ArrowDown") pitch = Math.max(-85 * deg, pitch - s); });
+const autoBtn = document.getElementById("auto");
+function setAuto(v) { autoRot = v; autoBtn.setAttribute("aria-pressed", v); }
+autoBtn.onclick = () => setAuto(!autoRot);
+const hint = document.getElementById("hint"); function hideHint() { hint.style.opacity = 0; setTimeout(() => hint.remove(), 700); }
+setTimeout(() => hint.isConnected && hideHint(), 4500);
+
+/* ---------- mini mapa ---------- */
+const map = document.getElementById("map");
+const P = META.park, MW = P.w, MD = P.d;
+map.setAttribute("viewBox", `${-MW / 2 - 4} -4 ${MW + 8} ${MD + 8}`);
+function drawMap() {
+  const a = panos[cur];
+  let s = `<rect x="${-MW / 2}" y="0" width="${MW}" height="${P.park_d}" rx="6" fill="#3f6d34" stroke="#cfe3cf" stroke-width=".8"/>`;
+  s += `<rect x="${-Math.min(80, MW) / 2}" y="${P.park_d}" width="${Math.min(80, MW)}" height="18" fill="#4a4e50"/>`;
+  s += `<rect x="-20" y="21" width="40" height="26" fill="#3d7079" stroke="#a9c7c9" stroke-width=".6"/>`;
+  s += `<circle cx="0" cy="11" r="7" fill="#2c5a26"/><circle cx="0" cy="${P.park_d - 20}" r="7" fill="#2c5a26"/>`;
+  panos.forEach((p, j) => { if (p.id === "dron") return; s += `<circle cx="${p.x}" cy="${p.z}" r="${j === cur ? 3.2 : 2.2}" fill="${j === cur ? "#5fd0c9" : "#f2f6f2"}" stroke="#0a100c" stroke-width=".8" data-j="${j}" style="cursor:pointer"/>`; });
+  if (a && a.id !== "dron") s += `<path id="cone" d="M0 0 L-9 -22 A24 24 0 0 1 9 -22 Z" fill="rgba(95,208,201,.35)" transform="translate(${a.x} ${a.z})"/>`;
+  map.innerHTML = s;
+  map.querySelectorAll("[data-j]").forEach(c => c.addEventListener("click", () => go(+c.dataset.j)));
+}
+
+/* ---------- galería ---------- */
+const gallery = document.getElementById("gallery"), grid = document.getElementById("grid");
+let gLight = "tarde";
+function drawGallery() {
+  grid.innerHTML = "";
+  FOTOS.filter(f => f.light === gLight).forEach(f => { const fig = document.createElement("figure"); fig.innerHTML = `<img src="${f.file}" alt="${f.name}" loading="lazy"><figcaption>${f.name}</figcaption>`; fig.onclick = () => { document.getElementById("lb-img").src = f.file; document.getElementById("lb-img").alt = f.name; document.getElementById("lightbox").hidden = false; }; grid.appendChild(fig); });
+  document.querySelectorAll("[data-g]").forEach(b => b.setAttribute("aria-pressed", b.dataset.g === gLight));
+}
+document.querySelectorAll("[data-g]").forEach(b => b.onclick = () => { gLight = b.dataset.g; drawGallery(); });
+document.getElementById("open-gallery").onclick = () => { drawGallery(); gallery.hidden = false; };
+document.getElementById("close-gallery").onclick = () => gallery.hidden = true;
+document.getElementById("lb-close").onclick = () => document.getElementById("lightbox").hidden = true;
+if (!FOTOS.length) document.getElementById("open-gallery").hidden = true;
+
+/* ---------- loop ---------- */
+function resize() { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
+addEventListener("resize", resize); resize();
+const clock = new THREE.Clock(), tmp = new THREE.Vector3();
+function frame() {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  if (fade) {
+    fade.k = Math.min(1, fade.k + dt / 0.9); const k = fade.k * fade.k * (3 - 2 * fade.k);
+    back.material.opacity = k; yaw = fade.fromYaw + (fade.toYaw - fade.fromYaw) * k; pitch = fade.fromPitch + (fade.toPitch - fade.fromPitch) * k;
+    if (fade.k >= 1) { const t = front; front = back; back = t; back.material.opacity = 0; front.renderOrder = 0; back.renderOrder = 1; fade = null; }
+  } else if (autoRot && !drag) yaw += dt * 0.05;
+  camera.fov += (fov - camera.fov) * 0.15; camera.updateProjectionMatrix();
+  camera.rotation.y = -yaw; camera.rotation.x = pitch;
+  const w = innerWidth, h = innerHeight;
+  for (const { el, v } of hots) { tmp.copy(v).multiplyScalar(10).project(camera); const vis = tmp.z < 1 && Math.abs(tmp.x) < 1.1 && Math.abs(tmp.y) < 1.1; el.hidden = !vis || !!fade; if (vis) el.style.transform = `translate(${(tmp.x * 0.5 + 0.5) * w}px, ${(-tmp.y * 0.5 + 0.5) * h}px) translate(-50%,-50%)`; }
+  const cone = document.getElementById("cone"); if (cone) { const a = panos[cur]; cone.setAttribute("transform", `translate(${a.x} ${a.z}) rotate(${yaw / deg})`); }
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+frame();
+{ const m = location.hash.match(/^#p(\d)$/); go(m ? Math.min(+m[1], panos.length - 1) : 0); }
+</script>
